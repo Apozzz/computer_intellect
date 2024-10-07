@@ -28,9 +28,3 @@ def inspect_data(data):
     """
     print("Dataset Information:")
     print(data.info())
-
-    print("\nFirst few rows of the dataset:")
-    print(data.head())
-
-    print("\nStatistical Summary:")
-    print(data.describe())

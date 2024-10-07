@@ -7,7 +7,7 @@ import category_encoders as ce
 class Preprocessor:
     def __init__(self, data):
         self.data = data.copy()
-        self.numerical_cols = self.data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+        self.numerical_cols = self.data.select_dtypes(include=['int64', 'float64', 'int32', 'float32']).columns.tolist()
         self.categorical_cols = self.data.select_dtypes(include=['object']).columns.tolist()
         self.high_cardinality_cols = [col for col in self.categorical_cols if self.data[col].nunique() > 100]
         self.categorical_cols = [col for col in self.categorical_cols if col not in self.high_cardinality_cols]
@@ -33,11 +33,6 @@ class Preprocessor:
             raise ValueError("Invalid strategy provided.")
 
         self.optimize_memory_usage()
-
-    def handle_missing_values_post_encoding(self):
-        """Handles missing values after encoding."""
-        imputer = SimpleImputer(strategy='constant', fill_value=0)
-        self.data = pd.DataFrame(imputer.fit_transform(self.data), columns=self.data.columns)
 
     def encode_categorical_variables(self):
         self.data = pd.get_dummies(self.data, columns=self.categorical_cols, drop_first=True)
@@ -77,15 +72,15 @@ class Preprocessor:
                 self.data[col] = pd.to_numeric(self.data[col], downcast='integer')
 
     def remove_irrelevant_features(self):
-        irrelevant_cols = ['id', 'title', 'body', 'source', 'has_photo', 'time']
+        irrelevant_cols = ['id', 'title', 'body', 'source', 'has_photo', 'time', 'address', 'pets_allowed']
         self.data.drop(columns=irrelevant_cols, inplace=True, errors='ignore')
-        self.numerical_cols = self.data.select_dtypes(include=['int64', 'float64']).columns.tolist()
+        self.numerical_cols = self.data.select_dtypes(include=['int64', 'float64', 'int32', 'float32']).columns.tolist()
         self.categorical_cols = self.data.select_dtypes(include=['object']).columns.tolist()
         self.high_cardinality_cols = [col for col in self.categorical_cols if self.data[col].nunique() > 100]
         self.categorical_cols = [col for col in self.categorical_cols if col not in self.high_cardinality_cols]
 
     def remove_outliers(self):
-        numerical_cols = ['price', 'square_feet', 'bathrooms', 'bedrooms']
+        numerical_cols = ['price', 'square_feet', 'bathrooms', 'bedrooms', 'longitude', 'latitude']
         filter = pd.Series(True, index=self.data.index)
         for col in numerical_cols:
             Q1 = self.data[col].quantile(0.25)
@@ -101,12 +96,35 @@ class Preprocessor:
         self.data[features_to_scale] = scaler.fit_transform(self.data[features_to_scale])
         self.scaler = scaler
 
-    def preprocess_data(self, target_column):
+    def preprocess_data(self, target_column, scaling_method='minmax'):
+        """
+        Preprocesses the data by removing irrelevant features, handling missing values, encoding variables, 
+        removing outliers, and applying scaling (normalization or standardization).
+        
+        scaling_method: Either 'minmax' for normalization or 'standard' for standardization.
+        """
         self.remove_irrelevant_features()
         self.handle_missing_values(strategy='median')
         self.encode_categorical_variables()
         self.encode_high_cardinality_variables()
         self.remove_outliers()
-        self.scale_numerical_features(target_column)
+        
+        if scaling_method == 'standard':
+            self.standardize_numerical_data(target_column)
+        elif scaling_method == 'minmax':
+            self.scale_numerical_features(target_column)
+        
         self.data[target_column] = pd.to_numeric(self.data[target_column], errors='coerce')
         self.data.dropna(subset=[target_column], inplace=True)
+
+    def preprocess_for_reporting(self, target_column):
+        """
+        Applies minimal preprocessing, leaves categorical columns intact,
+        and handles missing values for summary report purposes.
+        """
+        self.remove_irrelevant_features()
+        self.handle_missing_values(strategy='median')
+        self.remove_outliers()
+        self.data.dropna(subset=[target_column], inplace=True)
+
+        return self.data

@@ -1,112 +1,101 @@
-from sklearn.model_selection import GridSearchCV
+import pandas as pd
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
-def train_knn(X_train, y_train):
-    """
-    Trains a KNN regressor using GridSearchCV to find the best k.
 
-    Parameters:
-    - X_train (pd.DataFrame): Training features.
-    - y_train (pd.Series): Training target.
+class ModelTrainer:
+    def __init__(self, X_train, y_train, X_test, y_test):
+        self.X_train = X_train
+        self.y_train = y_train
+        self.X_test = X_test
+        self.y_test = y_test
+        self.results = []
 
-    Returns:
-    - best_knn: Best estimator from GridSearchCV.
-    - grid_search_knn: The GridSearchCV object.
-    """
-    param_grid = {'n_neighbors': [3, 5, 7, 9, 11]}
-    knn = KNeighborsRegressor()
-    grid_search_knn = GridSearchCV(knn, param_grid, cv=5, scoring='neg_mean_absolute_error')
-    grid_search_knn.fit(X_train, y_train)
-    best_knn = grid_search_knn.best_estimator_
-    return best_knn, grid_search_knn
+    def evaluate_model(self, model, model_name, params):
+        """
+        Evaluate the model using MAE and MAPE and store the results.
+        """
+        model.set_params(**params)
+        model.fit(self.X_train, self.y_train)
 
-def train_decision_tree(X_train, y_train):
-    """
-    Trains a Decision Tree regressor using GridSearchCV.
+        y_train_pred = model.predict(self.X_train)
+        y_test_pred = model.predict(self.X_test)
 
-    Parameters:
-    - X_train (pd.DataFrame): Training features.
-    - y_train (pd.Series): Training target.
+        train_mae = mean_absolute_error(self.y_train, y_train_pred)
+        train_mape = mean_absolute_percentage_error(self.y_train, y_train_pred)
+        test_mae = mean_absolute_error(self.y_test, y_test_pred)
+        test_mape = mean_absolute_percentage_error(self.y_test, y_test_pred)
 
-    Returns:
-    - best_dt: Best estimator from GridSearchCV.
-    - grid_search_dt: The GridSearchCV object.
-    """
-    param_grid = {
-        'max_depth': [None, 5, 10, 15],
-        'min_samples_leaf': [1, 2, 4, 6]
-    }
-    dt = DecisionTreeRegressor(random_state=42)
-    grid_search_dt = GridSearchCV(dt, param_grid, cv=5, scoring='neg_mean_absolute_error')
-    grid_search_dt.fit(X_train, y_train)
-    best_dt = grid_search_dt.best_estimator_
-    return best_dt, grid_search_dt
+        self.results.append({
+            'Model': model_name,
+            'Parameters': params,
+            'Train MAE': train_mae,
+            'Train MAPE': train_mape,
+            'Test MAE': test_mae,
+            'Test MAPE': test_mape,
+        })
 
-def train_random_forest(X_train, y_train):
-    """
-    Trains a Random Forest regressor using GridSearchCV.
+    def train_knn(self):
+        """
+        Trains KNN regressor with different hyperparameters.
+        """
+        knn = KNeighborsRegressor()
+        param_grid = [{'n_neighbors': k} for k in [3, 5, 7]]
+        for params in param_grid:
+            self.evaluate_model(knn, 'KNN', params)
 
-    Parameters:
-    - X_train (pd.DataFrame): Training features.
-    - y_train (pd.Series): Training target.
+    def train_decision_tree(self):
+        """
+        Trains Decision Tree regressor with different hyperparameters.
+        """
+        dt = DecisionTreeRegressor(random_state=42)
+        param_grid = [{'max_depth': d, 'min_samples_leaf': l} for d in [5, 10] for l in [2, 4]]
+        for params in param_grid:
+            self.evaluate_model(dt, 'Decision Tree', params)
 
-    Returns:
-    - best_rf: Best estimator from GridSearchCV.
-    - grid_search_rf: The GridSearchCV object.
-    """
-    param_grid = {
-        'n_estimators': [50, 100, 150],
-        'max_depth': [None, 5, 10],
-        'min_samples_leaf': [1, 2, 4]
-    }
-    rf = RandomForestRegressor(random_state=42)
-    randomized_search_rf = RandomizedSearchCV(
-        rf, 
-        param_grid, 
-        n_iter=10, 
-        cv=3, 
-        scoring='neg_mean_absolute_error', 
-        n_jobs=-1, 
-        random_state=42,
-        verbose=2,
-    )
-    randomized_search_rf.fit(X_train, y_train)
-    best_rf = randomized_search_rf.best_estimator_
-    return best_rf, randomized_search_rf
+    def train_random_forest(self):
+        """
+        Trains Random Forest regressor with different hyperparameters.
+        """
+        rf = RandomForestRegressor(random_state=42)
+        param_grid = [{'n_estimators': n, 'max_depth': d} for n in [50, 100] for d in [10, None]]
+        for params in param_grid:
+            self.evaluate_model(rf, 'Random Forest', params)
 
-def train_ann(X_train, y_train):
-    """
-    Trains an ANN regressor using GridSearchCV.
+    def train_ann(self):
+        """
+        Trains ANN regressor with different hyperparameters.
+        """
+        ann = MLPRegressor(max_iter=500, random_state=42)
+        param_grid = [{'hidden_layer_sizes': h, 'activation': a} for h in [(50,), (100,)] for a in ['relu', 'tanh']]
+        for params in param_grid:
+            self.evaluate_model(ann, 'ANN', params)
 
-    Parameters:
-    - X_train (pd.DataFrame): Training features.
-    - y_train (pd.Series): Training target.
+    def get_results(self):
+        """
+        Returns the model results as a pandas DataFrame.
+        """
+        results_df = pd.DataFrame(self.results)
 
-    Returns:
-    - best_ann: Best estimator from GridSearchCV.
-    - grid_search_ann: The GridSearchCV object.
-    """
-    param_dist = {
-        'hidden_layer_sizes': [(50,), (100,)],
-        'activation': ['relu', 'tanh'],
-        'solver': ['adam'],
-        'learning_rate': ['constant', 'adaptive']
-    }
-    ann = MLPRegressor(max_iter=500, random_state=42)
-    randomized_search_ann = RandomizedSearchCV(
-        estimator=ann,
-        param_distributions=param_dist,
-        n_iter=6,
-        cv=3,
-        scoring='neg_mean_absolute_error',
-        n_jobs=-1,
-        random_state=42,
-        verbose=2
-    )
-    randomized_search_ann.fit(X_train, y_train)
-    best_ann = randomized_search_ann.best_estimator_
-    return best_ann, randomized_search_ann
+        mean_train_mae = results_df['Train MAE'].mean()
+        mean_train_mape = results_df['Train MAPE'].mean()
+        mean_test_mae = results_df['Test MAE'].mean()
+        mean_test_mape = results_df['Test MAPE'].mean()
+
+        benchmark_row = pd.DataFrame([{
+            'Model': 'Benchmark',
+            'Parameters': '-',
+            'Train MAE': mean_train_mae,
+            'Train MAPE': mean_train_mape,
+            'Test MAE': mean_test_mae,
+            'Test MAPE': mean_test_mape
+        }])
+
+        results_df = pd.concat([results_df, benchmark_row], ignore_index=True)
+
+        return results_df
